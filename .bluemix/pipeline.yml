@@ -1,0 +1,133 @@
+---
+stages:
+- name: Assembly
+  inputs:
+  - type: git
+    branch: master
+  triggers:
+  - type: commit
+  jobs:
+  - name: Self-Assembly
+    type: builder
+    artifact_dir: ''
+    build_type: shell
+    script: |-
+      #!/bin/bash
+      # © Copyright IBM Corporation 2016.
+      #
+      # All rights reserved. This program and the accompanying materials
+      # are made available under the terms of the Eclipse Public License v1.0
+      # which accompanies this distribution, and is available at
+      # http://www.eclipse.org/legal/epl-v10.html
+      # Derived from dW article @ https://developer.ibm.com/bluemix/2014/07/03/getting-started-piwik-ibm-bluemix/
+      # and Github Repo @ https://github.com/joshisa/piwikstart
+      ##########
+
+      echo "Setting up Piwik for initial deployment"
+      echo "Updating apt-get ..."
+      sudo apt-get update > /dev/null 2>&1
+
+      echo "Installing deployment dependencies"
+      echo "   Installing jq for JSON parsing ..."
+      sudo apt-get --assume-yes install jq > /dev/null 2>&1
+      echo "   Installing zip/unzip ..."
+      sudo apt-get --assume-yes install zip unzip > /dev/null 2>&1
+
+      echo "Reading config.json"
+      PIWIKVERSION=$(jq -r '.["piwik-version"]' < ./bluezone/config.json)
+      PIWIKURL=$(jq -r '.["piwik-url"]' < ./bluezone/config.json)
+
+      echo "Fetching Piwik" $PIWIKVERSION "..."
+      wget $PIWIKURL -nv -O ./bluezone/piwik.zip
+      echo "Extracting Piwik..."
+      mkdir htdocs
+      unzip -o ./bluezone/piwik.zip -d ./htdocs > /dev/null 2>&1
+
+      echo "Fetching Piwik plugins"
+      jq -r '.plugins[]' < ./bluezone/config.json | while read plugin; do
+        wget $plugin -nv -O ./bluezone/TempPlugin.zip
+        unzip -o ./bluezone/TempPlugin.zip -d ./htdocs/piwik/plugins > /dev/null 2>&1
+        rm -f ./bluezone/TempPlugin.zip
+      done
+
+      echo "Setting up user provided plugins ..."
+      for f in ./bluezone/custom-plugins; do
+        if [ -d ${f} ]; then
+            # Will not run if no directories are available
+            echo "Installing ${f} User-Provided Plugin ..."
+            mv $f ./htdocs/piwik/plugins
+        else
+            echo "No User-Provided Plugins detected ..."
+        fi
+      done
+
+      echo "Fetching GeoLiteCity Data ..."
+      wget http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz -nv -O ./bluezone/GeoLiteCity.dat.gz
+      gunzip -c < ./bluezone/GeoLiteCity.dat.gz > ./htdocs/piwik/misc/GeoIPCity.dat
+
+      echo "Setting up unicode font support ..."
+      wget http://piwik.org/wp-content/uploads/unifont.ttf.zip -nv -O ./bluezone/unifont.ttf.zip
+      unzip -o ./bluezone/unifont.ttf.zip -d ./htdocs/piwik/plugins/ImageGraph/fonts > /dev/null 2>&1
+
+      echo "Making artifacts composer install friendly ..."
+      mv ./htdocs/piwik/composer.json .
+      mv ./htdocs/piwik/composer.lock .
+      echo "Patching composer.json paths ..."
+      jq '.autoload["psr-4"]["Piwik\\Plugins\\"] = "htdocs/piwik/plugins"  | .autoload["psr-4"]["Piwik\\"] = "htdocs/piwik/core"  | .autoload["psr-0"]["Zend_"] = "htdocs/piwik/libs" | .autoload["psr-0"]["HTML_"] = "htdocs/piwik/libs" | .autoload["psr-0"]["PEAR_"] = "htdocs/piwik/libs" | .autoload["psr-0"]["Archive_"] = "htdocs/piwik/libs"' composer.json > composer.tmp
+      rm composer.json
+      mv composer.tmp composer.json
+
+      echo "Making artifacts CF PHP friendly ..."
+      mv ./bluezone/configtweaks/.bp-config .
+      mkdir .extensions
+      mkdir .extensions/geoip
+      mv ./bluezone/configtweaks/extension.py .extensions/geoip
+      mv ./bluezone/configtweaks/.php-extensions .
+
+      echo "Patching Piwik artifacts"
+      mv ./bluezone/configtweaks/bootstrap.php ./htdocs/piwik
+      mv ./bluezone/configtweaks/.user.ini ./htdocs/piwik
+      mv ./bluezone/configtweaks/.htaccess ./htdocs/piwik
+      mv ./bluezone/apptweaks/FormDatabaseSetup.php ./htdocs/piwik/plugins/Installation
+      mv ./bluezone/apptweaks/Controller.php ./htdocs/piwik/plugins/Installation
+      mv ./bluezone/apptweaks/upgrade.php ./htdocs/piwik/libs/upgradephp
+
+      # Embed config file if provided
+      if [ -f "./bluezone/configtweaks/config.ini.php" ]
+      then
+       echo "Piwik Config file detected. Applying ..."
+       mv ./bluezone/configtweaks/config.ini.php ./htdocs/piwik/config
+      fi
+
+      # Cleaning up
+      echo -e "Cleaning up repository ..."
+      rm -rf ./bluezone
+      rm -rf .bluemix
+
+      # Generate Config Fetcher Script
+      IFS='|' read -ra PROJECT_NAME <<< "$IDS_PROJECT_NAME"
+      echo "#!/bin/bash" > fetchConfig.sh
+      echo "rm ./bluezone/configtweaks/config.ini.php" >> fetchConfig.sh
+      echo "cf files${PROJECT_NAME[1]} /app/htdocs/piwik/config/config.ini.php | sed '/Plugins\[\] = \"ExampleAPI\"/d' | sed '/Plugins\[\] = \"ExamplePlugin\"/d' | sed '/Plugins\[\] = \"ExampleRssWidget\"/d' | sed '/Plugins\[\] = \"Feedback\"/d' > ./bluezone/configtweaks/config.ini.php" >> fetchConfig.sh
+      echo "sed -i -e '1,3d' ./bluezone/configtweaks/config.ini.php" >> fetchConfig.sh
+      chmod +x fetchConfig.sh
+
+      echo "Your Piwik Assembly present is complete."
+- name: Deployment
+  inputs:
+  - type: job
+    stage: Assembly
+    job: Self-Assembly
+  triggers:
+  - type: stage
+  jobs:
+  - name: Deploy
+    type: deployer
+    target:
+      region_id: ibm:yp:us-south
+      organization: carlo.morgenstern@de.ibm.com
+      space: Dev
+      application: piwikbluemix
+    script: |-
+      #!/bin/bash
+      cf push "${CF_APP}"
