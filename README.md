@@ -42,6 +42,8 @@ This is a self-assembling two-stage deployment, which builds and modifies itself
 #### How does it work?
 The magic is in the .bluemix/pipeline.yml. This file configures the Bluemix DevOps pipeline and includes a build script, that pulls Piwik and the other code from various locations, applies tweaks and cleans itself up into a deployable asset. You may download the built asset by accessing the builder stage and "downloading all artifacts" (which can then be tweaked further and deployed manually using the CF CLI) or simply let the pipeline continue to do the assembly and deploy effort for you.
 
+If the Deploy to Bluemix feature does not work for you for whatever reason, you can also extract the two shell scripts responsible for assembly resp. deployment, that are present in the pipeline.yml file and execute them manually.
+
 #### Installing additional plugins
 If you want to add additional Piwik plugins not included within this repo, either add their download URI in **/bluezone/config.json** or put the plugin content into a named folder in **/bluezone/custom-plugins**. You are free to add as many plugin folders as you'd like within this parent **plugins** dir.  The scripts will loop through and place them within the correct location for you.
 - Perform a git add, git commit and git push to persist the newly added plugins within the IBM DevOps repository. For example,
