@@ -123,11 +123,8 @@ stages:
   jobs:
   - name: Deploy
     type: deployer
-    target:
-      region_id: ibm:yp:us-south
-      organization: carlo.morgenstern@de.ibm.com
-      space: Dev
-      application: piwikbluemix
+    artifact_dir: ''
+    build_type: shell
     script: |-
       #!/bin/bash
       # © Copyright IBM Corporation 2016.
