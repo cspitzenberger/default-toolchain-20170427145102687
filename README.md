@@ -1,36 +1,31 @@
-[![Deploy to Bluemix](https://bluemix.net/deploy/button.png)](https://bluemix.net/deploy?repository=https://github.com/carlomorgenstern/piwikbluemix)
+[![Create a Toolchain](https://console.ng.bluemix.net/devops/graphics/create_toolchain_button.png)](https://console.ng.bluemix.net/devops/setup/deploy?repository=https://github.com/carlomorgenstern/piwikbluemix-test)
 ### Piwik on Bluemix
 A minimal asset to get Piwik running on Bluemix fast.
-Forked and modified from [here.](https://github.com/joshisa/piwikstart)
 
 This is a self-assembling two-stage deployment, which builds and modifies itself from the piwik source.
 
 #### Getting Started  (Pre-requisite: [CF CLI](https://github.com/cloudfoundry/cli/releases))
 - Deploy the Bluemix app via the button above.
-- Clone your new repository to your local machine.
+- Clone your new repository to your local machine. E.g.:
   ```
-  git clone https://hub.jazz.net/git/<your_id>/<app_name>/
+  git clone https://github.com/<your_account>/<app_name>/
   ```
 - Browse to the url for your Piwik installation and complete the multi-step setup process. During the system check phase, it is normal to see a file integrity check warning message. This is caused by:
-  - movement of composer config files
-  - missing .gitignore files
+  - deletion of composer config files, to prevent the PHP buildpack from rebuilding Piwik
+  - additional files from already inserted plugin and configuration directories
   - detection of web installer tweaks to reduce end user friction
-  - 403 blocked access for the piwik.php test because of default security hardening
-- At this point, you should login and browse to the administration section of Piwik. It is important for you to **activate** at least one plugin (e.g. SecurityInfo) to proceed with this process. This is required in order to have a fully generated **config.ini.php** prior to downloading it. **NOTE**: To encourage better security practices, the deploy is configured to only allow login via **HTTPS** and will force redirect any attempts to access the deploy via NON-SSL. The following plugins are included by default:
-  - SecurityInfo
-  - PerformanceInfo
-  - SimpleSysMon
-  - PlatformsReport
+- At this point, you should login and browse to the administration section of Piwik. It is important for you to **activate** at least one plugin (e.g. SecurityInfo) to proceed with this process. This is required in order to have a fully generated **config.ini.php** prior to downloading it. The following plugins are included by default:
+  - Bandwidth
   - CustomAlerts
-  - SimplePageBuilder
+  - LogViewer
+  - PlatformsReport
+  - SecurityInfo
 - Your choices will be persisted within a generated file named **config.ini.php** that we will need to pull down and persist back into the repository. As an application running on a PaaS, the app's local file storage is ephemeral. Without persistence, any restart or crash/restart sequence will cause your Piwik application to revert back to the web installer sequence.
-- Within the terminal, browse to the root dir of your local cloned repo and execute a command similar to:
+- With the new CF Diego architecture, you have to SSH into your application instance and display the file or download it via SCP. You can read up on how to do this [here](https://docs.cloudfoundry.org/devguide/deploy-apps/ssh-apps.html#other-ssh-access).
+  If you are in your repository root, the command to execute would look something like this:
   ```
-  $ cf files <replace_me_with_app_name> /app/fetchConfig.sh | sed -e '1,3d' > fetchConfig.sh
-  $ chmod +x fetchConfig.sh
-  $ ./fetchConfig.sh
+  $ scp -P 2222 -o User=cf:APP-GUID/0 ssh.eu-gb.bluemix.net:2222:/app/piwik/config/config.ini.php ./bluezone/configtweaks/config.ini.php
   ```
-- This pulls down a helper bash script named fetchConfig.sh. Your app's name will already be populated. This script helps you (repeatedly) persist the config file in the expected location. It also will **DEACTIVATE** some of the Example Plugins that are deemed a performance+security vulnerability.
 - Perform a git add, git commit and git push to persist the config.ini.php within the IBM DevOps repository. For example,
   ```
   git add -A
@@ -40,9 +35,9 @@ This is a self-assembling two-stage deployment, which builds and modifies itself
 - With this git commit, your IBM DevOps pipeline will reassemble and redeploy Piwik. Then your Piwik application will be ready for you to use.
 
 #### How does it work?
-The magic is in the .bluemix/pipeline.yml. This file configures the Bluemix DevOps pipeline and includes a build script, that pulls Piwik and the other code from various locations, applies tweaks and cleans itself up into a deployable asset. You may download the built asset by accessing the builder stage and "downloading all artifacts" (which can then be tweaked further and deployed manually using the CF CLI) or simply let the pipeline continue to do the assembly and deploy effort for you.
+The magic is in the .bluemix/pipeline.yml. This file configures the Bluemix toolchain "Delivery Pipeline" plugin and includes a build script, that pulls Piwik and the other code from various locations, applies tweaks and cleans itself up into a deployable asset. You may download the built asset by accessing the builder stage and "downloading all artifacts" (which can then be tweaked further and deployed manually using the CF CLI) or simply let the pipeline continue to do the assembly and deploy effort for you.
 
-If the Deploy to Bluemix feature does not work for you for whatever reason, you can also extract the two shell scripts responsible for assembly resp. deployment, that are present in the pipeline.yml file and execute them manually.
+If the "Create a toolchain" feature does not work for you for whatever reason, you can also extract the two shell scripts responsible for assembly resp. deployment, that are present in the pipeline.yml file and execute them manually.
 
 #### Installing additional plugins
 If you want to add additional Piwik plugins not included within this repo, either add their download URI in **/bluezone/config.json** or put the plugin content into a named folder in **/bluezone/custom-plugins**. You are free to add as many plugin folders as you'd like within this parent **plugins** dir.  The scripts will loop through and place them within the correct location for you.

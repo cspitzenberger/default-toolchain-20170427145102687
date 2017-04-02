@@ -1,8 +1,9 @@
 Controller.php
-  Added line 537 - 579 to force SSL and enable multiple APP URIs
+  Added line 583 - 625 to force SSL and enable multiple APP URIs
 
 FormDatabaseSetup.php
-  Changed line 81 - 84 to include default database values from the environment
+  Changed line 83 - 91 to include default database values from the environment
 
 upgrade.php
   Added function at the end of the file to enable database values from the environment
+  and used it in lines 134 - 143.

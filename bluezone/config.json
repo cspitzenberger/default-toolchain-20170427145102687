@@ -1,12 +1,11 @@
 {
-    "piwik-version": "3.0.0-b4",
-    "piwik-url": "https://builds.piwik.org/piwik-3.0.0-b4.zip",
+    "piwik-version": "3.0.2",
+    "piwik-url": "https://builds.piwik.org/piwik-3.0.2.zip",
     "plugins": [
-        "http://plugins.piwik.org/api/2.0/plugins/SecurityInfo/download/3.0.2",
-        "http://plugins.piwik.org/api/2.0/plugins/PerformanceInfo/download/0.3.1",
-        "http://plugins.piwik.org/api/2.0/plugins/SimpleSysMon/download/0.3.1",
-        "http://plugins.piwik.org/api/2.0/plugins/PlatformsReport/download/1.0.4",
-        "http://plugins.piwik.org/api/2.0/plugins/CustomAlerts/download/0.1.23",
-        "http://plugins.piwik.org/api/2.0/plugins/SimplePageBuilder/download/1.2.0"
+        "https://plugins.piwik.org/api/2.0/plugins/Bandwidth/download/3.0.1",
+        "https://plugins.piwik.org/api/2.0/plugins/CustomAlerts/download/3.0.1",
+        "https://plugins.piwik.org/api/2.0/plugins/LogViewer/download/3.0.1",
+        "https://plugins.piwik.org/api/2.0/plugins/PlatformsReport/download/1.0.4",
+        "https://plugins.piwik.org/api/2.0/plugins/SecurityInfo/download/3.0.4"
     ]
 }

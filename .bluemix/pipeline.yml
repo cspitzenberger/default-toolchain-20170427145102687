@@ -13,16 +13,6 @@ stages:
     build_type: shell
     script: |-
       #!/bin/bash
-      # © Copyright IBM Corporation 2016.
-      #
-      # All rights reserved. This program and the accompanying materials
-      # are made available under the terms of the Eclipse Public License v1.0
-      # which accompanies this distribution, and is available at
-      # http://www.eclipse.org/legal/epl-v10.html
-      # Derived from dW article @ https://developer.ibm.com/bluemix/2014/07/03/getting-started-piwik-ibm-bluemix/
-      # and Github Repo @ https://github.com/joshisa/piwikstart
-      ##########
-
       echo "Setting up Piwik for initial deployment"
       echo "Updating apt-get ..."
       sudo apt-get update > /dev/null 2>&1
@@ -40,13 +30,12 @@ stages:
       echo "Fetching Piwik" $PIWIKVERSION "..."
       wget $PIWIKURL -nv -O ./bluezone/piwik.zip
       echo "Extracting Piwik..."
-      mkdir htdocs
-      unzip -o ./bluezone/piwik.zip -d ./htdocs > /dev/null 2>&1
+      unzip -o ./bluezone/piwik.zip -d . > /dev/null 2>&1
 
       echo "Fetching Piwik plugins"
       jq -r '.plugins[]' < ./bluezone/config.json | while read plugin; do
         wget $plugin -nv -O ./bluezone/TempPlugin.zip
-        unzip -o ./bluezone/TempPlugin.zip -d ./htdocs/piwik/plugins > /dev/null 2>&1
+        unzip -o ./bluezone/TempPlugin.zip -d ./piwik/plugins > /dev/null 2>&1
         rm -f ./bluezone/TempPlugin.zip
       done
 
@@ -55,62 +44,39 @@ stages:
         if [ -d ${f} ]; then
             # Will not run if no directories are available
             echo "Installing ${f} User-Provided Plugin ..."
-            mv $f ./htdocs/piwik/plugins
+            mv $f ./piwik/plugins
         else
             echo "No User-Provided Plugins detected ..."
         fi
       done
 
-      echo "Fetching GeoLiteCity Data ..."
-      wget http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz -nv -O ./bluezone/GeoLiteCity.dat.gz
-      gunzip -c < ./bluezone/GeoLiteCity.dat.gz > ./htdocs/piwik/misc/GeoIPCity.dat
-
       echo "Setting up unicode font support ..."
       wget http://piwik.org/wp-content/uploads/unifont.ttf.zip -nv -O ./bluezone/unifont.ttf.zip
-      unzip -o ./bluezone/unifont.ttf.zip -d ./htdocs/piwik/plugins/ImageGraph/fonts > /dev/null 2>&1
+      unzip -o ./bluezone/unifont.ttf.zip -d ./piwik/plugins/ImageGraph/fonts > /dev/null 2>&1
 
-      echo "Making artifacts composer install friendly ..."
-      mv ./htdocs/piwik/composer.json .
-      mv ./htdocs/piwik/composer.lock .
-      echo "Patching composer.json paths ..."
-      jq '.autoload["psr-4"]["Piwik\\Plugins\\"] = "htdocs/piwik/plugins"  | .autoload["psr-4"]["Piwik\\"] = "htdocs/piwik/core"  | .autoload["psr-0"]["Zend_"] = "htdocs/piwik/libs" | .autoload["psr-0"]["HTML_"] = "htdocs/piwik/libs" | .autoload["psr-0"]["PEAR_"] = "htdocs/piwik/libs" | .autoload["psr-0"]["Archive_"] = "htdocs/piwik/libs"' composer.json > composer.tmp
-      rm composer.json
-      mv composer.tmp composer.json
-
-      echo "Making artifacts CF PHP friendly ..."
+      echo "Making artifacts CF PHP Buildpack friendly ..."
       mv ./bluezone/configtweaks/.bp-config .
-      mkdir .extensions
-      mkdir .extensions/geoip
-      mv ./bluezone/configtweaks/extension.py .extensions/geoip
-      mv ./bluezone/configtweaks/.php-extensions .
+      rm -f ./piwik/composer.json
+      rm -f ./piwik/composer.lock
 
       echo "Patching Piwik artifacts"
-      mv ./bluezone/configtweaks/bootstrap.php ./htdocs/piwik
-      mv ./bluezone/configtweaks/.user.ini ./htdocs/piwik
-      mv ./bluezone/configtweaks/.htaccess ./htdocs/piwik
-      mv ./bluezone/apptweaks/FormDatabaseSetup.php ./htdocs/piwik/plugins/Installation
-      mv ./bluezone/apptweaks/Controller.php ./htdocs/piwik/plugins/Installation
-      mv ./bluezone/apptweaks/upgrade.php ./htdocs/piwik/libs/upgradephp
+      mv ./bluezone/configtweaks/bootstrap.php ./piwik
+      mv ./bluezone/configtweaks/.user.ini ./piwik
+      mv ./bluezone/apptweaks/FormDatabaseSetup.php ./piwik/plugins/Installation
+      mv ./bluezone/apptweaks/Controller.php ./piwik/plugins/Installation
+      mv ./bluezone/apptweaks/upgrade.php ./piwik/libs/upgradephp
 
       # Embed config file if provided
       if [ -f "./bluezone/configtweaks/config.ini.php" ]
       then
        echo "Piwik Config file detected. Applying ..."
-       mv ./bluezone/configtweaks/config.ini.php ./htdocs/piwik/config
+       mv ./bluezone/configtweaks/config.ini.php ./piwik/config
       fi
 
       # Cleaning up
       echo -e "Cleaning up repository ..."
       rm -rf ./bluezone
       rm -rf .bluemix
-
-      # Generate Config Fetcher Script
-      IFS='|' read -ra PROJECT_NAME <<< "$IDS_PROJECT_NAME"
-      echo "#!/bin/bash" > fetchConfig.sh
-      echo "rm ./bluezone/configtweaks/config.ini.php" >> fetchConfig.sh
-      echo "cf files${PROJECT_NAME[1]} /app/htdocs/piwik/config/config.ini.php | sed '/Plugins\[\] = \"ExampleAPI\"/d' | sed '/Plugins\[\] = \"ExamplePlugin\"/d' | sed '/Plugins\[\] = \"ExampleRssWidget\"/d' | sed '/Plugins\[\] = \"Feedback\"/d' > ./bluezone/configtweaks/config.ini.php" >> fetchConfig.sh
-      echo "sed -i -e '1,3d' ./bluezone/configtweaks/config.ini.php" >> fetchConfig.sh
-      chmod +x fetchConfig.sh
 
       echo "Your Piwik Assembly present is complete."
 - name: Deployment
@@ -123,18 +89,13 @@ stages:
   jobs:
   - name: Deploy
     type: deployer
-    artifact_dir: ''
-    build_type: shell
+    target:
+      url: ${CF_TARGET_URL}
+      organization: ${CF_ORGANIZATION}
+      space: ${CF_SPACE}
+      application: ${CF_APP}
     script: |-
       #!/bin/bash
-      # © Copyright IBM Corporation 2016.
-      #
-      # All rights reserved. This program and the accompanying materials
-      # are made available under the terms of the Eclipse Public License v1.0
-      # which accompanies this distribution, and is available at
-      # http://www.eclipse.org/legal/epl-v10.html
-      ##########
-
       # Creating ClearDB Service if it is not present yet
       if [ -z $(cf s|grep piwikdb|cut -d" " -f1-1) ]; then
         echo "Creating ClearDB MySQL Service named 'piwikdb'"
@@ -142,3 +103,8 @@ stages:
       fi
 
       cf push "${CF_APP}"
+hooks:
+- enabled: true
+  label: null
+  ssl_enabled: false
+  url: https://devops-api.ng.bluemix.net/v1/messaging/webhook/publish

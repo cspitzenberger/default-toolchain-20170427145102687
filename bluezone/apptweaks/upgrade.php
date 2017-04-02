@@ -20,13 +20,13 @@
  * script execution on setups where the native functions already exist. It
  * is meant as quick drop-in solution. It spares you from rewriting code or
  * using cumbersome workarounds instead of the more powerful v5 functions.
- *
+ * 
  * It cannot mirror PHP5s extended OO-semantics and functionality into PHP4
  * however. A few features are added here that weren't part of PHP yet. And
  * some other function collections are separated out into the ext/ directory.
  * It doesn't produce many custom error messages (YAGNI), and instead leaves
  * reporting to invoked functions or for native PHP execution.
- *
+ * 
  * And further this is PUBLIC DOMAIN (no copyright, no license, no warranty)
  * so therefore compatible to ALL open source licenses. You could rip this
  * paragraph out to republish this instead only under more restrictive terms
@@ -131,7 +131,16 @@ if(function_exists('parse_ini_file')) {
             return false;
         }
 
-        return parse_ini_file($filename, $process_sections);
+		# Modified wrapper function.  Capture result from built-in parse_ini_file function or false
+        $ini_temp =  parse_ini_file($filename, $process_sections, INI_SCANNER_NORMAL);
+        # Test if result is an array.  If so, let's modify the array to reflect VCAP_SERVICES values
+        if (is_array($ini_temp)) {
+          updateINIWithVCAPSERVICES($ini_temp, "");
+        }
+        # Return result.  Could be modified or original.
+        return $ini_temp;
+
+        //return parse_ini_file($filename, $process_sections);
 	}
 } else {
 	// we can't redefine parse_ini_file() if it has been disabled
@@ -271,7 +280,7 @@ if(function_exists('glob')) {
 						&& fnmatch($filePattern, $file)
 						&& (!($flags & GLOB_ONLYDIR) || is_dir("$path/$file"))) {
 					$matches[] = "$path/$file" . ($flags & GLOB_MARK ? '/' : '');
-				}
+				}	
 			}
 			closedir($handle);
 			if(!($flags & GLOB_NOSORT)) {
@@ -362,7 +371,7 @@ function _safe_serialize( $value )
 		{
 			$out .= _safe_serialize($k) . _safe_serialize($v);
 		}
-
+		
 		return 'a:'.count($value).':{'.$out.'}';
 	}
 
@@ -704,11 +713,20 @@ if (!function_exists('dump')) {
 }
 
 /**
- * source file:  /piwik/libs/upgradephp/upgrade.php
+ * Need to catch that PHP7 error object on php5
+ */
+if( !class_exists('\Error')) {
+	class Error {
+
+	}
+}
+
+/**
+ * source file:  /piwik/libs/upgradephp/upgrade.php 
  * Function Helper to set the DB Configuration details based on the VCAP_SERVICES
  * environment variable.  This is a useful modification to support
  * dynamic services within the IBM Bluemix platform.
- * Using this function has the added benefit of removing MySQL
+ * Using this function has the added benefit of removing MySQL & SendGrid configuration
  * details from the installation generated config.ini.php file - which improves security.
  *
  * @author Sanjay Joshi <joshisa (at) us (dot) ibm (dot) com
@@ -716,22 +734,27 @@ if (!function_exists('dump')) {
  * @param string $section
  * @return none.  Modifies param array by reference
  */
+ 
 function updateINIWithVCAPSERVICES(&$arrayObject, $section) {
    if (is_array($arrayObject)) {
-		foreach($arrayObject as $key=> &$data) {
-			if(is_array($data)) {
-				updateINIWithVCAPSERVICES($data, $key);
-			} elseif ($section === 'database' && ($key === 'host')) {
-				$arrayObject[$key] = $_ENV["SQLHOST"];
-			} elseif ($section === 'database' && ($key === 'port')) {
-				$arrayObject[$key] = $_ENV["SQLPORT"];
-			} elseif ($section === 'database' && ($key === 'username')) {
-				$arrayObject[$key] = $_ENV["SQLUSER"];
-			} elseif ($section === 'database' && ($key === 'password')) {
-				$arrayObject[$key] = $_ENV["SQLPASSWORD"];
-			} elseif ($section === 'database' && ($key === 'dbname')) {
-				$arrayObject[$key] = $_ENV["SQLDB"];
-			}
-		}
-	}
+      foreach($arrayObject as $key=> &$data) {
+         if(is_array($data)) {
+            updateINIWithVCAPSERVICES($data, $key);            
+         } elseif ($section === 'database' && ($key === 'host')) {
+            $arrayObject[$key] = $_ENV["SQLHOST"];
+         } elseif ($section === 'database' && ($key === 'port')) {
+            $arrayObject[$key] = $_ENV["SQLPORT"];
+         } elseif ($section === 'database' && ($key === 'username')) {
+            $arrayObject[$key] = $_ENV["SQLUSER"];
+         } elseif ($section === 'database' && ($key === 'password')) {
+            $arrayObject[$key] = $_ENV["SQLPASSWORD"];
+         } elseif ($section === 'database' && ($key === 'dbname')) {
+            $arrayObject[$key] = $_ENV["SQLDB"];
+         } elseif ($section === 'mail' && ($key === 'username')) {
+            $arrayObject[$key] = $_ENV["MAILUSER"];
+         } elseif ($section === 'mail' && ($key === 'password')) {
+            $arrayObject[$key] = $_ENV["MAILPASSWORD"];
+         }
+      }
+    }
 }
