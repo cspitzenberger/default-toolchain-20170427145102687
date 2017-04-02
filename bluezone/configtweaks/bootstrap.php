@@ -1,5 +1,5 @@
 <?php
-# Copyright IBM 2016
+# Copyright IBM 2017
 # Filename: bootstrap.php
 # Purpose: Populate global environment vars with Bluemix runtime values
 
