@@ -94,13 +94,6 @@ stages:
       organization: ${CF_ORGANIZATION}
       space: ${CF_SPACE}
       application: ${CF_APP}
-    script: |-
-      #!/bin/bash
-      # Creating ClearDB Service if it is not present yet
-      if [ -z $(cf s|grep piwikdb|cut -d" " -f1-1) ]; then
-        echo "Creating ClearDB MySQL Service named 'piwikdb'"
-        cf cs cleardb spark piwikdb > /dev/null 2>&1
-      fi
 
       cf push "${CF_APP}"
 hooks:
